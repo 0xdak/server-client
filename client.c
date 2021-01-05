@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define BFSZ 1024
 
 int main(void){
   int sock, valread = 0;
@@ -29,7 +30,7 @@ int main(void){
   serv_addr.sin_port   = htons(PORT);
 
   system("clear");
-  printf("Connected to %s:%d\n", HOST, PORT);
+  printf("Trying %s:%d\n", HOST, PORT);
 
   int conn = connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
   if (conn < 0){
@@ -37,15 +38,30 @@ int main(void){
     exit(EXIT_FAILURE);
   }
 
-  char buffer[1024];
-  while(1){
-    printf("Mesaj: ");
-    scanf("%s", buffer);
-    if (send(sock, buffer, strlen(buffer), 0) < 0){
-      perror("Send Failed");
-      exit(EXIT_FAILURE);
+  char buffer[BFSZ];
+  int pid = fork();
+  if(pid > 0){
+    while(1){
+      memset(buffer, 0, BFSZ);
+      valread = recv(sock, buffer, BFSZ, 0);
+      if(valread <= 0) {
+        printf("Connection is closed by %s\n", HOST);
+        break;
+      }
+      printf("%s\n", buffer);
     }
   }
+  if(pid == 0){
+    while(1){
+      memset(buffer, 0, BFSZ);
+      fgets(buffer, BFSZ, stdin);
+      if (send(sock, buffer, strlen(buffer), 0) < 0){
+        perror("Send Failed");
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+
 
   close(sock);
 
