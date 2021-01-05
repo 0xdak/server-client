@@ -5,12 +5,33 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <ctype.h> // trim
 
 #define PORT 9090           // port
 #define BFSZ 1024           // receive data size
 #define CLNM 0003           // number of allowed clients
 
 int prepare();
+
+char *ltrim(char *s)
+{
+    while(isspace(*s)) s++;
+    return s;
+}
+
+char *rtrim(char *s)
+{
+    char* back = s + strlen(s);
+    while(isspace(*--back));
+    *(back+1) = '\0';
+    return s;
+}
+
+char *trim(char *s)
+{
+    return rtrim(ltrim(s));
+}
+
 
 int main(void) {
   int server_fd, new_socket, valread;
@@ -22,45 +43,69 @@ int main(void) {
     perror("Listen Failed");
     exit(EXIT_FAILURE);
   }
-  printf("Listening...\n");
 
   struct sockaddr_in client_info;
   socklen_t len = sizeof(client_info);
-  new_socket = accept(server_fd, (struct sockaddr *)&client_info, &len);
-  if(new_socket < 0){
-    perror("Client Failed");
+  int pid = 1;
+  char client_ip[50];
+  if (pid > 0) {
+
+    //parent
+    //pid -> child'in process id'si
+    //printf("%d: parent = %d, benim pid = %d\n", pid, getpid());
+    while(pid > 0){
+      printf("Listening  127.0.0.1:%d\n", PORT);
+      new_socket = accept(server_fd, (struct sockaddr *)&client_info, &len);
+      if(new_socket < 0){
+        perror("Client Failed");
+        exit(EXIT_FAILURE);
+      }
+
+      inet_ntop(AF_INET, &(client_info.sin_addr), client_ip, 50);
+      printf("%s is connected.\n", client_ip);
+
+      pid = fork();
+    }
+
+  }
+  if (pid == 0) {
+    printf("Waiting %s\n", client_ip);
+    //printf()
+    // child
+    //printf("%d: child = %d, benim pid = %d\n", pid, getpid());
+    int cmdon = 0;
+
+    char buffer[BFSZ];
+    while(1){
+      memset(buffer, 0, BFSZ);
+      valread = recv(new_socket, buffer, BFSZ, 0);
+    //char *buffer = malloc(sizeof(char) * BFSZ);
+    //buffer = ltrim(buffer);
+
+      if (valread < 0){
+        perror("Receive Failed");
+        exit(EXIT_FAILURE);
+      }
+
+      if (strcmp(buffer, "cmdon") == 0){ // if the message is "cmdon"
+         cmdon = 1;
+         continue;
+      }
+      else if (strcmp(buffer, "cmdoff") == 0){
+        cmdon = 0;
+        continue;
+      }
+
+      if(cmdon == 1){
+        system(buffer);
+      }
+      else printf("%s\n", buffer);
+    }
+  }
+  else {
     exit(EXIT_FAILURE);
   }
 
-  char str[50];
-  inet_ntop(AF_INET, &(client_info.sin_addr), str, 50);
-  printf("%s is connected.\n", str);
-
-  int cmdon = 0;
-
-  char buffer[BFSZ];
-  while(1){
-    memset(buffer, 0, BFSZ);
-    valread = recv(new_socket, buffer, BFSZ, 0);
-    if (valread < 0){
-      perror("Receive Failed");
-      exit(EXIT_FAILURE);
-    }
-
-    if (strcmp(buffer, "cmdon") == 0){ // if the message is "cmdon"
-       cmdon = 1;
-       continue;
-    }
-    else if (strcmp(buffer, "cmdoff") == 0){
-      cmdon = 0;
-      continue;
-    }
-
-    if(cmdon == 1){
-      system(buffer);
-    }
-    else printf("%s\n", buffer);
-  }
   close(new_socket);
   close(server_fd);
 
@@ -72,7 +117,6 @@ int prepare(){
   int server_fd;
   struct sockaddr_in address;
   int opt = 1;
-  char HOST[20] = "";
 
   // creating socket file descriptor
   server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -103,7 +147,7 @@ int prepare(){
     perror("Bind Failed");
     exit(EXIT_FAILURE);
   }
-  printf("Connected to %s:%d\n", HOST, PORT);
+//printf("Connected to %s:%d\n", HOST, PORT);
 
   return server_fd;
 }
