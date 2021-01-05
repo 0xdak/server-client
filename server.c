@@ -6,18 +6,21 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-#define PORT 9090                       // port
-#define BFSZ 1024                       // receive data size
-#define CLNM 0003                       // number of allowed clients
+#define HOST "localhost"                            // host
+#define PORT 9090                                   // port
+#define BFSZ 1024                                   // receive data size
+#define CLNM 0003                                   // number of allowed clients
 #define OUT  1
 
-#define d_printf OUT && printf          // controlling printf
+#define d_printf OUT && printf                      // controlling printf
 
 int prepare();
 int communicate(int client_socket, char* client_ip);
 
 int main(void) {
-  int server_fd, new_socket, valread;
+  int server_fd, new_client;
+  int pid = 1;
+  char client_ip[50];
 
   server_fd = prepare();
 
@@ -27,24 +30,22 @@ int main(void) {
     exit(EXIT_FAILURE);
   }
 
-  struct sockaddr_in client_info;
-  socklen_t len = sizeof(client_info);
-  int pid = 1;
-  char client_ip[50];
+  struct sockaddr_in client_addr;
+  socklen_t len = sizeof(client_addr);
+
   if (pid > 0) {
-    d_printf("Listening  127.0.0.1:%d\n", PORT);
+    d_printf("Listening %s:%d\n",HOST, PORT);
     while(pid > 0){
-      new_socket = accept(server_fd, (struct sockaddr *)&client_info, &len);
-      printf("new_socket = %d\n", new_socket);
-      if(new_socket < 0){
+      new_client = accept(server_fd, (struct sockaddr *)&client_addr, &len);
+      if(new_client < 0){
         d_printf("Client Failed");
         exit(EXIT_FAILURE);
       }
-
-      inet_ntop(AF_INET, &(client_info.sin_addr), client_ip, 50);
+      inet_ntop(AF_INET, &(client_addr.sin_addr), client_ip, 50);
       d_printf("%s is connected.\n", client_ip);
 
-      send(new_socket, "Connection Successful\n", 50, 0);
+      send(new_client, "Connection Successful\n", 50, 0);
+
       pid = fork();
 
     }
@@ -53,7 +54,7 @@ int main(void) {
   if (pid == 0){
     // new client
     while (1){
-      if(communicate(new_socket, client_ip) == 0)
+        if(communicate(new_client, client_ip) == 0)
         break;
     }
   }
@@ -61,29 +62,30 @@ int main(void) {
     exit(EXIT_FAILURE);
   }
 
-  close(new_socket);
+  close(new_client);
   close(server_fd);
 
   return 0;
 }
 
 int cmdon = 0;
+int valread;
 char buffer[BFSZ];
 char output[BFSZ];
 char line[BFSZ];
-int valread;
 int communicate(int client_socket, char* client_ip){
   memset(buffer, 0, BFSZ);
   memset(line, 0, BFSZ);
   memset(output, 0, BFSZ);
   valread = recv(client_socket, buffer, BFSZ, 0);
   strtok(buffer, "\r");
+  strtok(buffer, "\n");
   if (valread <= 0){
     d_printf("%s : Connection is closed\n", client_ip);
     return 0;
   }
 
-  if (strcmp(buffer, "cmdon") == 0){ // if the message is "cmdon"
+  if (strcmp(buffer, "cmdon") == 0){                // if the message is "cmdon"
     cmdon = 1;
     d_printf("%s : ", client_ip);
     d_printf("Terminal mode on\n");
@@ -112,10 +114,9 @@ int communicate(int client_socket, char* client_ip){
 }
 
 
-// TODO programa arguman olarak ip ve port vermek
 int prepare(){
   int server_fd;
-  struct sockaddr_in address;
+  struct sockaddr_in server_addr;
   int opt = 1;
 
   // creating socket file descriptor
@@ -137,12 +138,13 @@ int prepare(){
   //strcat(HOST, (char*)&ip);
   //strcat(HOST, "192.168.1.105");
 
-  address.sin_family      = AF_INET;
-  address.sin_addr.s_addr = INADDR_ANY;      //inet_addr(HOST);
-  address.sin_port        = htons(PORT);
+  server_addr.sin_family      = AF_INET;
+  inet_pton(AF_INET, HOST, &server_addr.sin_addr);
+//server_addr.sin_addr.s_addr = INADDR_ANY;             //inet_addr(HOST);
+  server_addr.sin_port        = htons(PORT);
 
   // forcefully attaching socket to the port 9090
-  int bind_rs = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+  int bind_rs = bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
   if (bind_rs < 0){
     d_printf("Bind Failed");
     exit(EXIT_FAILURE);
