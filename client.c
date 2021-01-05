@@ -48,13 +48,14 @@ int main(void){
         printf("Connection is closed by %s\n", HOST);
         break;
       }
-      printf("%s\n", buffer);
+      printf(">>>%s", buffer);
     }
   }
   if(pid == 0){
     while(1){
       memset(buffer, 0, BFSZ);
       fgets(buffer, BFSZ, stdin);
+      strtok(buffer, "\n");
       if (send(sock, buffer, strlen(buffer), 0) < 0){
         perror("Send Failed");
         exit(EXIT_FAILURE);

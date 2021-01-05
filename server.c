@@ -5,16 +5,17 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
-#include <ctype.h> // trim
 
-#define PORT 9090           // port
-#define BFSZ 1024           // receive data size
-#define CLNM 0003           // number of allowed clients
+#define PORT 9090                       // port
+#define BFSZ 1024                       // receive data size
+#define CLNM 0003                       // number of allowed clients
+#define OUT  1
+
+#define d_printf OUT && printf          // controlling printf
 
 int prepare();
-int communicate(int client);
+int communicate(int client_socket, char* client_ip);
 
-int online = 0;
 int main(void) {
   int server_fd, new_socket, valread;
 
@@ -22,7 +23,7 @@ int main(void) {
 
   // listening
   if (listen(server_fd, CLNM) < 0){
-    perror("Listen Failed");
+    d_printf("Listen Failed");
     exit(EXIT_FAILURE);
   }
 
@@ -31,32 +32,30 @@ int main(void) {
   int pid = 1;
   char client_ip[50];
   if (pid > 0) {
-    printf("Listening  127.0.0.1:%d\n", PORT);
+    d_printf("Listening  127.0.0.1:%d\n", PORT);
     while(pid > 0){
       new_socket = accept(server_fd, (struct sockaddr *)&client_info, &len);
+      printf("new_socket = %d\n", new_socket);
       if(new_socket < 0){
-        perror("Client Failed");
+        d_printf("Client Failed");
         exit(EXIT_FAILURE);
       }
 
       inet_ntop(AF_INET, &(client_info.sin_addr), client_ip, 50);
-      printf("%s is connected.\n", client_ip);
+      d_printf("%s is connected.\n", client_ip);
 
-      send(new_socket, "Connection Successful", 100, 0);
-      online++;
-      printf("%d Kisi Cevrimici", online);
+      send(new_socket, "Connection Successful\n", 50, 0);
       pid = fork();
 
     }
 
   }
-  if (pid == 0) {
+  if (pid == 0){
     // new client
-    while(1){
-      if(communicate(new_socket) == 0)
+    while (1){
+      if(communicate(new_socket, client_ip) == 0)
         break;
     }
-
   }
   else {
     exit(EXIT_FAILURE);
@@ -70,40 +69,47 @@ int main(void) {
 
 int cmdon = 0;
 char buffer[BFSZ];
+char output[BFSZ];
+char line[BFSZ];
 int valread;
-int communicate(int client){
+int communicate(int client_socket, char* client_ip){
   memset(buffer, 0, BFSZ);
-  valread = recv(client, buffer, BFSZ, 0);
-  strtok(buffer, "\n");
+  memset(line, 0, BFSZ);
+  memset(output, 0, BFSZ);
+  valread = recv(client_socket, buffer, BFSZ, 0);
+  strtok(buffer, "\r");
   if (valread <= 0){
-    perror("Connection is closed");
-    online--;
-    printf("%d Kisi Cevrimici\n", online);
+    d_printf("%s : Connection is closed\n", client_ip);
     return 0;
   }
 
   if (strcmp(buffer, "cmdon") == 0){ // if the message is "cmdon"
     cmdon = 1;
-    printf("Terminal mode on\n");
+    d_printf("%s : ", client_ip);
+    d_printf("Terminal mode on\n");
     return 1;
   }
   else if (strcmp(buffer, "cmdoff") == 0){
     cmdon = 0;
-    printf("Terminal mode off\n");
+    d_printf("%s : ", client_ip);
+    d_printf("Terminal mode off\n");
     return 1;
   }
 
   if(cmdon == 1){
     FILE *cmd = popen(buffer, "r");
-    char output[BFSZ];
-    fgets(output, sizeof(char) * BFSZ, cmd);
-    strtok(output, "\n");
-    send(client, output, BFSZ, 0);
+    while ( fgets( line, sizeof(char) * BFSZ, cmd) != NULL ) {
+      strcat(output, line);
+    }
+  //strtok(output, "\n");
+    send(client_socket, output, BFSZ, 0);
   }
-  else printf("%s\n", buffer);
+  else {
+    d_printf("%s : ", client_ip);
+    d_printf("%s\n", buffer);
+  }
   return 1;
 }
-
 
 
 // TODO programa arguman olarak ip ve port vermek
@@ -115,7 +121,7 @@ int prepare(){
   // creating socket file descriptor
   server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd == 0){
-    perror("Socket Failed");
+    d_printf("Socket Failed");
     exit(EXIT_FAILURE);
   }
 
@@ -124,7 +130,7 @@ int prepare(){
   // For "Already in use" mistake
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
                                                                &opt, sizeof(opt))){
-    perror("setsockopt");
+    d_printf("setsockopt");
     exit(EXIT_FAILURE);
   }
 
@@ -138,7 +144,7 @@ int prepare(){
   // forcefully attaching socket to the port 9090
   int bind_rs = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
   if (bind_rs < 0){
-    perror("Bind Failed");
+    d_printf("Bind Failed");
     exit(EXIT_FAILURE);
   }
 //printf("Connected to %s:%d\n", HOST, PORT);
