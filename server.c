@@ -105,6 +105,7 @@ int communicate(int client_socket, char* client_ip){
     }
   //strtok(output, "\n");
     send(client_socket, output, BFSZ, 0);
+    pclose(cmd);
   }
   else {
     d_printf("%s : ", client_ip);
