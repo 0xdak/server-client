@@ -9,7 +9,7 @@
 #define HOST "localhost"                            // host
 #define PORT 9090                                   // port
 #define BFSZ 1024                                   // receive data size
-#define CLNM 0003                                   // number of allowed clients
+#define CLNM 0003                                   // NOT number of allowed clients
 #define OUT  1
 
 #define d_printf OUT && printf                      // controlling printf
